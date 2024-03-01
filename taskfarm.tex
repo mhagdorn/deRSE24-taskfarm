@@ -1,0 +1,266 @@
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usetheme{Hannover}
+
+\begin{document}
+\title{Taskfarm}
+\subtitle{A Client/Server Framework for Supporting Massive Embarrassingly Parallel Workloads}
+\author{Magnus Hagdorn}
+\date{7th March 2024}
+
+
+\begin{frame}
+\titlepage
+\end{frame}
+
+\begin{frame}
+\frametitle{Outline}
+\tableofcontents
+\end{frame}
+
+\section{The Problem}
+\begin{frame}
+  \frametitle{The Problem}
+  \begin{itemize}
+  \item processing raw satellite data from ESA CryoSat mission
+  \item data consist of point data in space and time along satellite paths
+  \item create grid of ice elevation change
+  \end{itemize}
+\end{frame}
+
+\subsection{Approach}
+\begin{frame}
+  \frametitle{The Problem}
+  \framesubtitle{Approach}
+    \begin{center}
+      \begin{minipage}{0.6\textwidth}
+      \includegraphics<1>[width=\textwidth]{problem_1}%
+      \includegraphics<2>[width=\textwidth]{problem_2}%
+      \includegraphics<3>[width=\textwidth]{problem_3}%
+      \includegraphics<4->[width=\textwidth]{problem_4}%
+    \end{minipage}
+  \end{center}
+  \vfill
+  \begin{minipage}[t][0.7\textheight][t]{\textwidth}
+    \begin{itemize}
+    \item<2-> define grid
+    \item<3-> for each post
+    \item<4-> consider all points that fall within radius $r$
+    \item<5-> fit
+      $$z(x, y, t) = c_0x + c_1y + \dot h t + c_2$$
+    \end{itemize}
+  \end{minipage}
+\end{frame}
+
+\begin{frame}
+  \frametitle{The Problem}
+  \framesubtitle{Approach}
+    \begin{center}
+      \begin{minipage}{0.6\textwidth}
+      \includegraphics<1>[width=\textwidth]{problem_5}%
+      \includegraphics<2>[width=\textwidth]{problem_6}%
+      \includegraphics<3>[width=\textwidth]{problem_7}%
+    \end{minipage}
+  \end{center}
+  \vfill
+  \begin{minipage}[t][0.7\textheight][t]{\textwidth}
+    \begin{itemize}
+    \item<1-> consider points within square $2r$ centred on post
+    \item<2-> calculate distance of each point to centre
+    \item<3-> only use points with distance $<r$ for fitting
+    \end{itemize}
+  \end{minipage}
+\end{frame}
+
+\subsection{Challenge}
+\begin{frame}[<+->]
+  \frametitle{The Problem}
+  \framesubtitle{Challenge}
+  \begin{itemize}
+  \item big data, for Antarctica $>$1TB
+  \item lat/lon grid at poles has singularity
+  \item data set grows
+  \end{itemize}
+\end{frame}
+
+\section{Implementation}
+\begin{frame}
+  \frametitle{Implementation}
+  \begin{center}
+    \huge
+    embarassingly parallel \uncover<2->{$\Rightarrow$ taskfarm}
+  \end{center}
+  \begin{itemize}
+  \item<3-> define projection
+  \item<4-> define output grid
+  \item<5-> tile output grid
+  \item<6-> assemble tiles
+  \end{itemize}
+\end{frame}
+
+\subsection{Input}
+\begin{frame}[<+->]
+  \frametitle{Implementation}
+  \framesubtitle{Input}
+  \begin{itemize}
+  \item load data, project it and dump into chunked point DB
+  \item point DB chunks are stored as pandas dataframes
+  \item chunks are stored in deep directory structure
+  \item path is linearised chunk index (in hex)
+  \end{itemize}
+\end{frame}
+
+
+\subsection{Output}
+\begin{frame}[<+->]
+  \frametitle{Implementation}
+  \framesubtitle{Output}
+  \begin{itemize}
+  \item identify required chunks and load them
+  \item for each node
+    \begin{itemize}
+    \item select points within square of size $2r$ (and other criteria)
+    \item compute distance to centre and drop points $d>r$
+    \item fit data
+    \end{itemize}
+  \item store tile
+  \end{itemize}
+\end{frame}
+
+\section{Taskfarm}
+\subsection{MPI}
+\begin{frame}
+  \frametitle{Taskfarm}
+  \framesubtitle{MPI} 
+    \begin{center}
+      \begin{minipage}{0.7\textwidth}
+        \includegraphics[width=\textwidth]{mpi}
+      \end{minipage}
+  \end{center}
+  \vfill
+  \begin{minipage}[t][0.5\textheight][t]{\textwidth}
+    \begin{description}
+    \item<2->[good] a programming model we all know and love
+    \item<3->[bad] the size of the task farm is fixed
+    \item<4->[ugly] the entire farm burns down when a worker crashes
+    \end{description}
+  \end{minipage}
+\end{frame}
+
+\subsection{Array Job}
+\begin{frame}
+  \frametitle{Taskfarm}
+  \framesubtitle{Array Job} 
+    \begin{center}
+      \begin{minipage}{0.7\textwidth}
+        \includegraphics[width=\textwidth]{array_job}
+      \end{minipage}
+  \end{center}
+  \vfill
+  \begin{minipage}[t][0.5\textheight][t]{\textwidth}
+    \begin{description}
+    \item<2->[good]
+      \begin{itemize}
+      \item simple
+      \item the farm can dynamically grow/shrink
+      \item crashing jobs don't take the farm down
+      \end{itemize}
+    \item<3->[bad] small tasks take longer to schedule than run
+    \item<4->[ugly] when the farm gets huge it is hard keeping track what needs to be done
+    \end{description}
+  \end{minipage}
+\end{frame}
+
+\subsection{Database}
+\begin{frame}
+  \frametitle{Taskfarm}
+  \framesubtitle{Database} 
+    \begin{center}
+      \begin{minipage}{0.7\textwidth}
+        \includegraphics[width=\textwidth]{database}
+      \end{minipage}
+  \end{center}
+  \vfill
+  \begin{minipage}[t][0.6\textheight][t]{\textwidth}
+    \begin{description}
+    \item<2->[good]
+      \begin{itemize}
+      \item state of farm is stored in DB
+      \item can use auxiliary programs to monitor progress
+      \end{itemize}
+    \item<3->[bad] need a proper DB with row locking
+    \item<4->[ugly] limited number of parallel connections
+    \end{description}
+  \end{minipage}
+\end{frame}
+
+\subsection{Webapp}
+\begin{frame}
+  \frametitle{Taskfarm}
+  \framesubtitle{Webapp} 
+    \begin{center}
+      \begin{minipage}{0.7\textwidth}
+        \includegraphics[width=\textwidth]{webapp}
+      \end{minipage}
+  \end{center}
+  \vfill
+  \begin{minipage}[t][0.5\textheight][t]{\textwidth}
+    \begin{description}
+    \item<2->[good]
+      \begin{itemize}
+      \item can have many parallel connections
+      \item can check taskfarm status from outside cluster
+      \end{itemize}
+    \item<3->[bad] need to host the web app somewhere
+    \end{description}
+  \end{minipage}
+\end{frame}
+
+\subsection{Implementation}
+\begin{frame}
+  \frametitle{Taskfarm}
+  \framesubtitle{Implementation} 
+  \begin{itemize}
+  \item flask
+  \item flask-sqlalchemy
+  \item flask-httpauth
+  \item a database with row locking, eg postgresgl
+  \item gunicorn
+  \item web server
+  \end{itemize}
+\end{frame}
+
+\subsection{Example Code}
+\begin{frame}
+  \frametitle{Taskfarm}
+  \framesubtitle{Example Code}
+  {\footnotesize
+    \lstinputlisting[language=Python]{example.py}
+    }
+\end{frame}
+
+\section{Software Publishing}
+\begin{frame}
+  \frametitle{Software Publishing}
+  \begin{itemize}
+  \item<1-> documentation - sphinx + read the docs
+  \item<2-> unit testing of both server and client
+  \item<3-> CITATION.cff
+  \item<4-> submitted to \href{https://openresearchsoftware.metajnl.com/}{\color{blue} Journal of Open Research Software}
+  \item<5-> docker container with server
+  \end{itemize}
+  \begin{flushright}
+    \uncover<6->{
+      \begin{minipage}{0.4\linewidth}
+        \begin{center}
+          \includegraphics[width=0.6\textwidth]{qr}\\
+          \href{https://doi.org/10.5334/jors.393}{\color{blue} DOI: 10.5334/jors.393}        
+        \end{center}
+      \end{minipage}
+      }
+  \end{flushright}
+\end{frame}
+
+
+\end{document}
